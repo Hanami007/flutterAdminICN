@@ -35,7 +35,7 @@ export function EnrollmentChart() {
               />
               <YAxis fontSize={12} tickLine={false} axisLine={false} stroke="hsl(220, 9%, 46%)" />
               <Tooltip
-                formatter={(value: number) => [value, 'Enrollments']}
+                formatter={(value: any) => [value, 'Enrollments']}
                 labelFormatter={(label) => new Date(label).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
                 contentStyle={{
                   backgroundColor: 'hsl(224, 71%, 4%)',

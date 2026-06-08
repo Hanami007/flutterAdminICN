@@ -54,7 +54,7 @@ export default function CourseFormPage() {
     formState: { errors },
     reset,
   } = useForm<CourseFormData>({
-    resolver: zodResolver(courseSchema),
+    resolver: zodResolver(courseSchema) as any,
     defaultValues: {
       currency: 'THB',
       level: 'beginner',

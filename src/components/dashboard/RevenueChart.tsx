@@ -52,7 +52,7 @@ export function RevenueChart() {
                 stroke="hsl(220, 9%, 46%)"
               />
               <Tooltip
-                formatter={(value: number) => [formatCurrency(value), 'Revenue']}
+                formatter={(value: any) => [formatCurrency(Number(value)), 'Revenue']}
                 labelFormatter={(label) => new Date(label).toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' })}
                 contentStyle={{
                   backgroundColor: 'hsl(224, 71%, 4%)',

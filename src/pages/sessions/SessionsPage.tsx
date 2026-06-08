@@ -32,7 +32,7 @@ export default function SessionsPage() {
     { key: 'type', label: 'Type', render: (s) => (
       <Badge variant="outline" className="gap-1">
         {s.type === 'online' ? <Monitor className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}
-        {s.type.charAt(0).toUpperCase() + s.type.slice(1)}
+        {s.type ? (s.type.charAt(0).toUpperCase() + s.type.slice(1)) : '—'}
       </Badge>
     )},
     { key: 'capacity', label: 'Capacity', render: (s) => `${s.enrolled_count}/${s.capacity}` },

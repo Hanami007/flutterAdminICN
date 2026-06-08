@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Create a default admin profile for development
         setProfile({
           id: userId,
-          email: user?.email || 'admin@learnhub.com',
+          email: user?.email || 'admin@gmail.com',
           full_name: 'Admin User',
           avatar_url: null,
           role: 'admin',
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fallback for development when Supabase isn't configured
       setProfile({
         id: userId,
-        email: user?.email || 'admin@learnhub.com',
+        email: user?.email || 'admin@gmail.com',
         full_name: 'Admin User',
         avatar_url: null,
         role: 'admin',

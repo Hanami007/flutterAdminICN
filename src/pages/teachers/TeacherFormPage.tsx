@@ -35,7 +35,7 @@ export default function TeacherFormPage() {
   const updateMutation = useUpdateTeacher();
 
   const { register, handleSubmit, setValue, watch, formState: { errors }, reset } = useForm<TeacherFormData>({
-    resolver: zodResolver(teacherSchema),
+    resolver: zodResolver(teacherSchema) as any,
     defaultValues: { is_active: true },
   });
 

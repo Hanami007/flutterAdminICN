@@ -27,6 +27,8 @@ export interface Course {
   max_students: number | null;
   category_id: string | null;
   teacher_id: string | null;
+  what_you_will_learn: string[] | null;
+  requirements: string[] | null;
   category?: Category;
   teacher?: Teacher;
   lessons_count?: number;

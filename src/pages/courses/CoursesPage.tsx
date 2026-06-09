@@ -85,7 +85,7 @@ export default function CoursesPage() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/courses/${course.id}`)}>
+            <DropdownMenuItem onClick={() => navigate(`/courses/${course.id}/edit`)}>
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </DropdownMenuItem>
             {course.status === 'draft' ? (
@@ -113,7 +113,7 @@ export default function CoursesPage() {
         description="Manage your course catalog"
         breadcrumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Courses' }]}
         actions={
-          <Button onClick={() => navigate('/courses/new')}>
+          <Button onClick={() => navigate('/courses/create')}>
             <Plus className="h-4 w-4" /> Add Course
           </Button>
         }

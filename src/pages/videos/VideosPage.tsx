@@ -11,8 +11,10 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Switch } from '@/components/ui/switch';
 import { useCourses } from '@/hooks/useCourses';
 import { useLessons, useCreateLesson, useUpdateLesson, useDeleteLesson, useReorderLessons } from '@/hooks/useVideos';
+import { uploadVideo } from '@/services/videos';
+import { toast } from '@/hooks/useToast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Video, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { Plus, Pencil, Trash2, Video, ArrowUp, ArrowDown, ExternalLink, Upload, Loader2 } from 'lucide-react';
 import type { Lesson } from '@/types/database';
 
 export default function VideosPage() {
@@ -22,6 +24,8 @@ export default function VideosPage() {
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
 
   // Form states
+  const [lessonId, setLessonId] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
@@ -41,6 +45,7 @@ export default function VideosPage() {
 
   const openCreate = () => {
     setEditTarget(null);
+    setLessonId(self.crypto?.randomUUID() || Math.random().toString(36).substring(2, 15));
     setTitle('');
     setDescription('');
     setVideoUrl('');
@@ -52,6 +57,7 @@ export default function VideosPage() {
 
   const openEdit = (lesson: Lesson) => {
     setEditTarget(lesson);
+    setLessonId(lesson.id);
     setTitle(lesson.title);
     setDescription(lesson.description || '');
     setVideoUrl(lesson.video_url || '');
@@ -63,6 +69,7 @@ export default function VideosPage() {
 
   const handleSubmit = () => {
     const data: Partial<Lesson> = {
+      id: editTarget ? editTarget.id : lessonId,
       course_id: selectedCourseId,
       title,
       description,
@@ -84,6 +91,55 @@ export default function VideosPage() {
         { ...data, sort_order: nextSortOrder },
         { onSuccess: () => setDialogOpen(false) }
       );
+    }
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('video/')) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please select a video file (mp4, webm, etc.)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const durationSec = await new Promise<number>((resolve) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => {
+          window.URL.revokeObjectURL(video.src);
+          resolve(Math.round(video.duration));
+        };
+        video.onerror = () => resolve(0);
+        video.src = URL.createObjectURL(file);
+      });
+
+      if (durationSec > 0) {
+        setDuration(durationSec);
+      }
+
+      const uploadedUrl = await uploadVideo(file, selectedCourseId, lessonId);
+      setVideoUrl(uploadedUrl);
+
+      toast({
+        title: 'Video uploaded successfully',
+        variant: 'success',
+      });
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: 'Upload failed',
+        description: error.message || 'Failed to upload video file',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -300,13 +356,77 @@ export default function VideosPage() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Video URL / Embed Link</Label>
-              <Input
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder="https://vimeo.com/... or https://youtube.com/..."
-              />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    placeholder="https://vimeo.com/... or https://youtube.com/..."
+                    disabled={isUploading}
+                    className="pr-16"
+                  />
+                  {videoUrl && (
+                    <div className="absolute right-3 top-2.5 text-emerald-500 text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded font-semibold capitalize">
+                      Ready
+                    </div>
+                  )}
+                </div>
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    id="video-file-upload"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleVideoUpload}
+                    disabled={isUploading}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isUploading}
+                    onClick={() => document.getElementById('video-file-upload')?.click()}
+                    className="flex items-center gap-2"
+                  >
+                    {isUploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {isUploading ? 'Uploading...' : 'Upload File'}
+                  </Button>
+                </div>
+              </div>
+
+              {isUploading && (
+                <div className="text-xs text-muted-foreground flex items-center gap-2 px-1 animate-pulse">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                  <span>Uploading video to storage and extracting duration...</span>
+                </div>
+              )}
+
+              {videoUrl && videoUrl.includes('supabase.co') && (
+                <div className="text-xs text-muted-foreground bg-primary/5 border border-primary/10 rounded-md p-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <Video className="h-4 w-4 text-primary shrink-0" />
+                    <span className="truncate font-medium">Uploaded Storage File</span>
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      setVideoUrl('');
+                      setDuration(0);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Description / Transcript</Label>

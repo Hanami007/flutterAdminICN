@@ -31,6 +31,8 @@ const courseSchema = z.object({
   teacher_id: z.string().optional(),
   max_students: z.coerce.number().optional(),
   is_featured: z.boolean().default(false),
+  what_you_will_learn: z.string().optional(),
+  requirements: z.string().optional(),
 });
 
 type CourseFormData = z.infer<typeof courseSchema>;
@@ -88,18 +90,31 @@ export default function CourseFormPage() {
         teacher_id: course.teacher_id || undefined,
         max_students: course.max_students || undefined,
         is_featured: course.is_featured,
+        what_you_will_learn: course.what_you_will_learn?.join('\n') || '',
+        requirements: course.requirements?.join('\n') || '',
       });
     }
   }, [course, isEdit, reset]);
 
   const onSubmit = (data: CourseFormData) => {
+    const formattedData = {
+      ...data,
+      category_id: data.category_id || null,
+      teacher_id: data.teacher_id || null,
+      what_you_will_learn: data.what_you_will_learn
+        ? data.what_you_will_learn.split('\n').map(line => line.trim()).filter(line => line !== '')
+        : [],
+      requirements: data.requirements
+        ? data.requirements.split('\n').map(line => line.trim()).filter(line => line !== '')
+        : [],
+    };
     if (isEdit && id) {
       updateMutation.mutate(
-        { id, data },
+        { id, data: formattedData as any },
         { onSuccess: () => navigate('/courses') }
       );
     } else {
-      createMutation.mutate(data, { onSuccess: () => navigate('/courses') });
+      createMutation.mutate(formattedData as any, { onSuccess: () => navigate('/courses') });
     }
   };
 
@@ -229,6 +244,36 @@ export default function CourseFormPage() {
                   onCheckedChange={(v) => setValue('is_featured', v)}
                 />
                 <Label>Featured Course</Label>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Course Details (What You'll Learn & Requirements) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Course Curriculum Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="what_you_will_learn">What You'll Learn (One point per line)</Label>
+                <Textarea
+                  id="what_you_will_learn"
+                  {...register('what_you_will_learn')}
+                  placeholder="e.g. Master React fundamentals&#10;Build 5 real-world projects&#10;Understand state management"
+                  rows={6}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="requirements">Requirements (One point per line)</Label>
+                <Textarea
+                  id="requirements"
+                  {...register('requirements')}
+                  placeholder="e.g. Basic HTML/CSS knowledge&#10;No previous programming experience required&#10;A computer with internet connection"
+                  rows={6}
+                />
               </div>
             </div>
           </CardContent>

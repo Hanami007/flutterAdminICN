@@ -285,3 +285,164 @@ CREATE POLICY "anon_all_lessons" ON lessons FOR ALL USING (true) WITH CHECK (tru
 CREATE POLICY "anon_all_branches" ON branches FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all_settings" ON platform_settings FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "anon_all_activities" ON activities FOR ALL USING (true) WITH CHECK (true);
+
+-- ────────────────────────────────────────────────────────────
+-- 13. COMPATIBILITY: NOT NULL DROPS & AUTO-SYNC TRIGGERS
+-- ────────────────────────────────────────────────────────────
+
+-- Drop NOT NULL constraints to prevent insert failures when columns are renamed in frontend
+ALTER TABLE courses ALTER COLUMN name DROP NOT NULL;
+ALTER TABLE courses ALTER COLUMN instructor_id DROP NOT NULL;
+ALTER TABLE teachers ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE bookings ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE bookings ALTER COLUMN class_session_id DROP NOT NULL;
+ALTER TABLE payments ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE payments ALTER COLUMN booking_id DROP NOT NULL;
+ALTER TABLE class_sessions ALTER COLUMN session_type DROP NOT NULL;
+
+-- A. Courses Name-Title Sync Trigger
+CREATE OR REPLACE FUNCTION sync_course_name_title()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_user_id UUID;
+  v_teacher_id UUID;
+BEGIN
+  -- 1. Sync name and title
+  IF NEW.title IS NOT NULL AND NEW.name IS NULL THEN
+    NEW.name := NEW.title;
+  END IF;
+  IF NEW.name IS NOT NULL AND NEW.title IS NULL THEN
+    NEW.title := NEW.name;
+  END IF;
+
+  -- 2. Sync instructor_id (users table) and teacher_id (teachers table)
+  IF NEW.teacher_id IS NOT NULL AND NEW.instructor_id IS NULL THEN
+    SELECT user_id INTO v_user_id FROM teachers WHERE id = NEW.teacher_id;
+    IF v_user_id IS NOT NULL THEN
+      NEW.instructor_id := v_user_id;
+    END IF;
+  END IF;
+
+  IF NEW.instructor_id IS NOT NULL AND NEW.teacher_id IS NULL THEN
+    SELECT id INTO v_teacher_id FROM teachers WHERE user_id = NEW.instructor_id;
+    IF v_teacher_id IS NOT NULL THEN
+      NEW.teacher_id := v_teacher_id;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_course_name_title ON courses;
+CREATE TRIGGER trg_sync_course_name_title
+BEFORE INSERT OR UPDATE ON courses
+FOR EACH ROW EXECUTE FUNCTION sync_course_name_title();
+
+-- B. Bookings User-Student / Session Sync Trigger
+CREATE OR REPLACE FUNCTION sync_booking_ids()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.student_id IS NOT NULL AND NEW.user_id IS NULL THEN
+    NEW.user_id := NEW.student_id;
+  END IF;
+  IF NEW.user_id IS NOT NULL AND NEW.student_id IS NULL THEN
+    NEW.student_id := NEW.user_id;
+  END IF;
+  IF NEW.session_id IS NOT NULL AND NEW.class_session_id IS NULL THEN
+    NEW.class_session_id := NEW.session_id;
+  END IF;
+  IF NEW.class_session_id IS NOT NULL AND NEW.session_id IS NULL THEN
+    NEW.session_id := NEW.class_session_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_booking_ids ON bookings;
+CREATE TRIGGER trg_sync_booking_ids
+BEFORE INSERT OR UPDATE ON bookings
+FOR EACH ROW EXECUTE FUNCTION sync_booking_ids();
+
+-- C. Payments User-Student Sync Trigger
+CREATE OR REPLACE FUNCTION sync_payment_ids()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.student_id IS NOT NULL AND NEW.user_id IS NULL THEN
+    NEW.user_id := NEW.student_id;
+  END IF;
+  IF NEW.user_id IS NOT NULL AND NEW.student_id IS NULL THEN
+    NEW.student_id := NEW.user_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_payment_ids ON payments;
+CREATE TRIGGER trg_sync_payment_ids
+BEFORE INSERT OR UPDATE ON payments
+FOR EACH ROW EXECUTE FUNCTION sync_payment_ids();
+
+-- D. Class Sessions Type Sync Trigger
+CREATE OR REPLACE FUNCTION sync_session_types()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.type IS NOT NULL AND NEW.session_type IS NULL THEN
+    NEW.session_type := NEW.type;
+  END IF;
+  IF NEW.session_type IS NOT NULL AND NEW.type IS NULL THEN
+    NEW.type := NEW.session_type;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_session_types ON class_sessions;
+CREATE TRIGGER trg_sync_session_types
+BEFORE INSERT OR UPDATE ON class_sessions
+FOR EACH ROW EXECUTE FUNCTION sync_session_types();
+
+-- ────────────────────────────────────────────────────────────
+-- 14. STORAGE BUCKETS & POLICIES (FOR VIDEO & IMAGE UPLOADS)
+-- ────────────────────────────────────────────────────────────
+
+-- Create buckets if they do not exist
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('lesson-videos', 'lesson-videos', true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('course-thumbnails', 'course-thumbnails', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Drop existing storage policies for these buckets to avoid conflicts
+DROP POLICY IF EXISTS "Public Access lesson-videos" ON storage.objects;
+DROP POLICY IF EXISTS "Public Upload lesson-videos" ON storage.objects;
+DROP POLICY IF EXISTS "Public Update lesson-videos" ON storage.objects;
+DROP POLICY IF EXISTS "Public Delete lesson-videos" ON storage.objects;
+
+DROP POLICY IF EXISTS "Public Access course-thumbnails" ON storage.objects;
+DROP POLICY IF EXISTS "Public Upload course-thumbnails" ON storage.objects;
+DROP POLICY IF EXISTS "Public Update course-thumbnails" ON storage.objects;
+DROP POLICY IF EXISTS "Public Delete course-thumbnails" ON storage.objects;
+
+-- Create Policies for lesson-videos
+CREATE POLICY "Public Access lesson-videos" ON storage.objects FOR SELECT TO public USING (bucket_id = 'lesson-videos');
+CREATE POLICY "Public Upload lesson-videos" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'lesson-videos');
+CREATE POLICY "Public Update lesson-videos" ON storage.objects FOR UPDATE TO public USING (bucket_id = 'lesson-videos');
+CREATE POLICY "Public Delete lesson-videos" ON storage.objects FOR DELETE TO public USING (bucket_id = 'lesson-videos');
+
+-- Create Policies for course-thumbnails
+CREATE POLICY "Public Access course-thumbnails" ON storage.objects FOR SELECT TO public USING (bucket_id = 'course-thumbnails');
+CREATE POLICY "Public Upload course-thumbnails" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'course-thumbnails');
+CREATE POLICY "Public Update course-thumbnails" ON storage.objects FOR UPDATE TO public USING (bucket_id = 'course-thumbnails');
+CREATE POLICY "Public Delete course-thumbnails" ON storage.objects FOR DELETE TO public USING (bucket_id = 'course-thumbnails');
+
+-- ────────────────────────────────────────────────────────────
+-- 15. ADD COURSE DETAILS COLUMNS (WHAT YOU WILL LEARN & REQUIREMENTS)
+-- ────────────────────────────────────────────────────────────
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS what_you_will_learn TEXT[];
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS requirements TEXT[];
+
+
+

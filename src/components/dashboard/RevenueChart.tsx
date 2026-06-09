@@ -21,13 +21,13 @@ export function RevenueChart() {
   }
 
   return (
-    <Card className="col-span-full lg:col-span-2">
+    <Card className="col-span-full lg:col-span-2 min-w-0">
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Revenue Overview</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-[300px] w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <AreaChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
               <defs>
                 <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">

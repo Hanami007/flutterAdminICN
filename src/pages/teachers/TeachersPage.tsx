@@ -68,7 +68,7 @@ export default function TeachersPage() {
             <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => navigate(`/teachers/${t.id}`)}><Pencil className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate(`/teachers/${t.id}/edit`)}><Pencil className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setDeleteTarget(t)} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -82,7 +82,7 @@ export default function TeachersPage() {
         title="Teachers"
         description="Manage instructors and their profiles"
         breadcrumbs={[{ label: 'Dashboard', href: '/' }, { label: 'Teachers' }]}
-        actions={<Button onClick={() => navigate('/teachers/new')}><Plus className="h-4 w-4" /> Add Teacher</Button>}
+        actions={<Button onClick={() => navigate('/teachers/create')}><Plus className="h-4 w-4" /> Add Teacher</Button>}
       />
       <DataTable
         columns={columns}

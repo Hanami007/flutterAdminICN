@@ -48,22 +48,19 @@ export async function getRevenueChart(days: number = 30): Promise<RevenueDataPoi
     .gte('created_at', startDate.toISOString())
     .order('created_at', { ascending: true });
 
-  if (!data || data.length === 0) {
-    // Generate sample data for demo
-    return Array.from({ length: days }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - i));
-      return {
-        date: date.toISOString().split('T')[0]!,
-        revenue: Math.floor(Math.random() * 50000) + 10000,
-      };
-    });
+  const grouped: Record<string, number> = {};
+  for (let i = 0; i <= days; i++) {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + i);
+    const dateStr = date.toISOString().split('T')[0]!;
+    grouped[dateStr] = 0;
   }
 
-  const grouped: Record<string, number> = {};
-  data.forEach((p) => {
-    const date = new Date(p.created_at).toISOString().split('T')[0]!;
-    grouped[date] = (grouped[date] || 0) + p.amount;
+  data?.forEach((p) => {
+    const dateStr = new Date(p.created_at).toISOString().split('T')[0]!;
+    if (grouped[dateStr] !== undefined) {
+      grouped[dateStr] += Number(p.amount || 0);
+    }
   });
 
   return Object.entries(grouped).map(([date, revenue]) => ({ date, revenue }));
@@ -79,46 +76,107 @@ export async function getEnrollmentChart(days: number = 30): Promise<EnrollmentD
     .gte('created_at', startDate.toISOString())
     .order('created_at', { ascending: true });
 
-  if (!data || data.length === 0) {
-    return Array.from({ length: days }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - i));
-      return {
-        date: date.toISOString().split('T')[0]!,
-        enrollments: Math.floor(Math.random() * 20) + 5,
-      };
-    });
+  const grouped: Record<string, number> = {};
+  for (let i = 0; i <= days; i++) {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + i);
+    const dateStr = date.toISOString().split('T')[0]!;
+    grouped[dateStr] = 0;
   }
 
-  const grouped: Record<string, number> = {};
-  data.forEach((e) => {
-    const date = new Date(e.created_at).toISOString().split('T')[0]!;
-    grouped[date] = (grouped[date] || 0) + 1;
+  data?.forEach((e) => {
+    const dateStr = new Date(e.created_at).toISOString().split('T')[0]!;
+    if (grouped[dateStr] !== undefined) {
+      grouped[dateStr] += 1;
+    }
   });
 
   return Object.entries(grouped).map(([date, enrollments]) => ({ date, enrollments }));
 }
 
 export async function getRecentActivities(limit: number = 10): Promise<Activity[]> {
-  const { data } = await supabase
+  const { data: dbActivities } = await supabase
     .from('activities')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (!data || data.length === 0) {
-    // Sample activities for demo
-    return [
-      { id: '1', type: 'enrollment', title: 'New Enrollment', description: 'John Smith enrolled in React Masterclass', user_name: 'John Smith', metadata: null, created_at: new Date(Date.now() - 300000).toISOString() },
-      { id: '2', type: 'payment', title: 'Payment Received', description: '฿2,500 payment for Advanced TypeScript', user_name: 'Jane Doe', metadata: null, created_at: new Date(Date.now() - 900000).toISOString() },
-      { id: '3', type: 'course_created', title: 'Course Published', description: 'New course: UI/UX Design Fundamentals', user_name: 'Admin', metadata: null, created_at: new Date(Date.now() - 1800000).toISOString() },
-      { id: '4', type: 'booking', title: 'Booking Approved', description: 'Booking for Python Workshop approved', user_name: 'Staff', metadata: null, created_at: new Date(Date.now() - 3600000).toISOString() },
-      { id: '5', type: 'review', title: 'New Review', description: '5-star review on Data Science course', user_name: 'Alice Chen', metadata: null, created_at: new Date(Date.now() - 7200000).toISOString() },
-      { id: '6', type: 'enrollment', title: 'New Enrollment', description: 'Bob Lee enrolled in Flutter Development', user_name: 'Bob Lee', metadata: null, created_at: new Date(Date.now() - 10800000).toISOString() },
-      { id: '7', type: 'session', title: 'Session Started', description: 'React Workshop at Bangkok Branch started', user_name: null, metadata: null, created_at: new Date(Date.now() - 14400000).toISOString() },
-      { id: '8', type: 'payment', title: 'Refund Issued', description: '฿1,200 refund for cancelled enrollment', user_name: 'Support', metadata: null, created_at: new Date(Date.now() - 18000000).toISOString() },
-    ];
+  if (dbActivities && dbActivities.length > 0) {
+    return dbActivities as Activity[];
   }
 
-  return data as Activity[];
+  try {
+    const [
+      { data: enrollments },
+      { data: payments },
+      { data: bookings },
+    ] = await Promise.all([
+      supabase
+        .from('enrollments')
+        .select('created_at, student:students(full_name), course:courses(title)')
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      supabase
+        .from('payments')
+        .select('created_at, amount, student:students(full_name), course:courses(title)')
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      supabase
+        .from('bookings')
+        .select('created_at, status, student:students(full_name), session:class_sessions(title)')
+        .order('created_at', { ascending: false })
+        .limit(limit),
+    ]);
+
+    const items: Activity[] = [];
+
+    enrollments?.forEach((e: any, idx) => {
+      const studentName = e.student?.full_name || 'Student';
+      const courseTitle = e.course?.title || 'Course';
+      items.push({
+        id: `enrollment-${idx}-${e.created_at}`,
+        type: 'enrollment',
+        title: 'New Enrollment',
+        description: `${studentName} enrolled in "${courseTitle}"`,
+        user_name: studentName,
+        metadata: null,
+        created_at: e.created_at,
+      });
+    });
+
+    payments?.forEach((p: any, idx) => {
+      const studentName = p.student?.full_name || 'Student';
+      const courseTitle = p.course?.title || 'Course';
+      items.push({
+        id: `payment-${idx}-${p.created_at}`,
+        type: 'payment',
+        title: 'Payment Received',
+        description: `฿${p.amount?.toLocaleString()} payment received for "${courseTitle}"`,
+        user_name: studentName,
+        metadata: null,
+        created_at: p.created_at,
+      });
+    });
+
+    bookings?.forEach((b: any, idx) => {
+      const studentName = b.student?.full_name || 'Student';
+      const sessionTitle = b.session?.title || 'Class Session';
+      items.push({
+        id: `booking-${idx}-${b.created_at}`,
+        type: 'booking',
+        title: `Booking ${b.status}`,
+        description: `Booking for "${sessionTitle}" was marked ${b.status}`,
+        user_name: studentName,
+        metadata: null,
+        created_at: b.created_at,
+      });
+    });
+
+    return items
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit);
+  } catch (err) {
+    console.error('Failed to aggregate recent activities:', err);
+    return [];
+  }
 }

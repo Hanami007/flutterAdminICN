@@ -6,7 +6,7 @@ export async function getBookings(filters: QueryFilters = {}): Promise<Paginated
 
   let query = supabase
     .from('bookings')
-    .select('*, student:students(*), session:class_sessions(*, course:courses(*), teacher:teachers(*), branch:branches(*))', { count: 'exact' });
+    .select('*, student:students(*), session:class_sessions!fk_bookings_session(*, course:courses(*), teacher:teachers(*), branch:branches(*))', { count: 'exact' });
 
   if (status) query = query.eq('status', status);
   if (search) query = query.or(`notes.ilike.%${search}%`);

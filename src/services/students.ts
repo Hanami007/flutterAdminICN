@@ -32,7 +32,7 @@ export async function getStudentEnrollments(studentId: string): Promise<Enrollme
   const { data, error } = await supabase
     .from('enrollments')
     .select('*, course:courses(*)')
-    .eq('student_id', studentId)
+    .eq('user_id', studentId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;

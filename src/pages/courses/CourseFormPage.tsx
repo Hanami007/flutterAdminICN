@@ -27,7 +27,7 @@ const courseSchema = z.object({
   currency: z.string().default('THB'),
   duration_hours: z.coerce.number().min(0).default(0),
   level: z.enum(['beginner', 'intermediate', 'advanced', 'all_levels']),
-  category_id: z.string().optional(),
+  category_id: z.string().min(1, 'Category is required'),
   teacher_id: z.string().optional(),
   max_students: z.coerce.number().optional(),
   is_featured: z.boolean().default(false),
@@ -63,6 +63,8 @@ export default function CourseFormPage() {
       is_featured: false,
       price: 0,
       duration_hours: 0,
+      category_id: '',
+      teacher_id: '',
     },
   });
 
@@ -210,7 +212,7 @@ export default function CourseFormPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Category</Label>
+                <Label>Category *</Label>
                 <Select value={watch('category_id') || ''} onValueChange={(v) => setValue('category_id', v)}>
                   <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                   <SelectContent>
@@ -219,6 +221,7 @@ export default function CourseFormPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.category_id && <p className="text-xs text-destructive">{errors.category_id.message}</p>}
               </div>
 
               <div className="space-y-2">

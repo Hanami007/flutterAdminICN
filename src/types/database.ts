@@ -177,6 +177,7 @@ export interface Payment {
   transaction_id: string | null;
   refund_amount: number | null;
   refund_reason: string | null;
+  slip_url: string | null;
   student?: Student;
   course?: Course;
   created_at: string;

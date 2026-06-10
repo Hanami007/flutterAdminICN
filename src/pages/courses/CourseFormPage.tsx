@@ -13,8 +13,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCourse, useCreateCourse, useUpdateCourse } from '@/hooks/useCourses';
 import { useCategories } from '@/hooks/useCategories';
 import { useTeachers } from '@/hooks/useTeachers';
+import { uploadCourseThumbnail, updateCourse } from '@/services/courses';
 import { Loader2, Save } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { slugify } from '@/lib/utils';
 
 const courseSchema = z.object({
@@ -33,6 +34,7 @@ const courseSchema = z.object({
   is_featured: z.boolean().default(false),
   what_you_will_learn: z.string().optional(),
   requirements: z.string().optional(),
+  thumbnail_url: z.string().optional(),
 });
 
 type CourseFormData = z.infer<typeof courseSchema>;
@@ -41,6 +43,10 @@ export default function CourseFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = !!id;
+
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailUrlPreview, setThumbnailUrlPreview] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const { data: course, isLoading: courseLoading } = useCourse(id || '');
   const { data: categories } = useCategories();
@@ -65,6 +71,7 @@ export default function CourseFormPage() {
       duration_hours: 0,
       category_id: '',
       teacher_id: '',
+      thumbnail_url: '',
     },
   });
 
@@ -94,33 +101,67 @@ export default function CourseFormPage() {
         is_featured: course.is_featured,
         what_you_will_learn: course.what_you_will_learn?.join('\n') || '',
         requirements: course.requirements?.join('\n') || '',
+        thumbnail_url: course.thumbnail_url || '',
       });
+      if (course.thumbnail_url) {
+        setThumbnailUrlPreview(course.thumbnail_url);
+      }
     }
   }, [course, isEdit, reset]);
 
-  const onSubmit = (data: CourseFormData) => {
-    const formattedData = {
-      ...data,
-      category_id: data.category_id || null,
-      teacher_id: data.teacher_id || null,
-      what_you_will_learn: data.what_you_will_learn
-        ? data.what_you_will_learn.split('\n').map(line => line.trim()).filter(line => line !== '')
-        : [],
-      requirements: data.requirements
-        ? data.requirements.split('\n').map(line => line.trim()).filter(line => line !== '')
-        : [],
-    };
-    if (isEdit && id) {
-      updateMutation.mutate(
-        { id, data: formattedData as any },
-        { onSuccess: () => navigate('/courses') }
-      );
-    } else {
-      createMutation.mutate(formattedData as any, { onSuccess: () => navigate('/courses') });
+  const onSubmit = async (data: CourseFormData) => {
+    setIsUploading(true);
+    try {
+      let finalThumbnailUrl = data.thumbnail_url || '';
+
+      if (thumbnailFile && isEdit && id) {
+        finalThumbnailUrl = await uploadCourseThumbnail(thumbnailFile, id);
+      }
+
+      const formattedData = {
+        ...data,
+        category_id: data.category_id || null,
+        teacher_id: data.teacher_id || null,
+        thumbnail_url: finalThumbnailUrl || null,
+        what_you_will_learn: data.what_you_will_learn
+          ? data.what_you_will_learn.split('\n').map(line => line.trim()).filter(line => line !== '')
+          : [],
+        requirements: data.requirements
+          ? data.requirements.split('\n').map(line => line.trim()).filter(line => line !== '')
+          : [],
+      };
+
+      if (isEdit && id) {
+        updateMutation.mutate(
+          { id, data: formattedData as any },
+          {
+            onSuccess: () => navigate('/courses'),
+            onError: () => setIsUploading(false),
+          }
+        );
+      } else {
+        createMutation.mutate(formattedData as any, {
+          onSuccess: async (newCourse) => {
+            if (thumbnailFile && newCourse?.id) {
+              try {
+                const uploadedUrl = await uploadCourseThumbnail(thumbnailFile, newCourse.id);
+                await updateCourse(newCourse.id, { thumbnail_url: uploadedUrl });
+              } catch (uploadErr) {
+                console.error('Failed to upload thumbnail for new course:', uploadErr);
+              }
+            }
+            navigate('/courses');
+          },
+          onError: () => setIsUploading(false),
+        });
+      }
+    } catch (error: any) {
+      console.error('Form submission error:', error);
+      setIsUploading(false);
     }
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending = createMutation.isPending || updateMutation.isPending || isUploading;
 
   if (isEdit && courseLoading) {
     return (
@@ -170,6 +211,58 @@ export default function CourseFormPage() {
                 <Label htmlFor="description">Description *</Label>
                 <Textarea id="description" {...register('description')} placeholder="Full course description..." rows={5} />
                 {errors.description && <p className="text-xs text-destructive">{errors.description.message}</p>}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cover Image */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Course Cover Image</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
+              <div className="w-48 h-28 border border-dashed border-border rounded-lg overflow-hidden flex items-center justify-center bg-muted relative">
+                {thumbnailUrlPreview ? (
+                  <img
+                    src={thumbnailUrlPreview}
+                    alt="Course cover preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xs text-muted-foreground">No Cover Image</span>
+                )}
+              </div>
+              <div className="flex-1 space-y-2 w-full">
+                <Label htmlFor="thumbnail_file">Upload Cover Image</Label>
+                <Input
+                  id="thumbnail_file"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setThumbnailFile(file);
+                      setThumbnailUrlPreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Recommended size: 800x450 pixels (16:9 ratio). Max size: 2MB.
+                </p>
+                <div className="pt-2">
+                  <Label htmlFor="thumbnail_url">Or Image URL</Label>
+                  <Input
+                    id="thumbnail_url"
+                    {...register('thumbnail_url')}
+                    placeholder="https://example.com/image.jpg"
+                    onChange={(e) => {
+                      setThumbnailUrlPreview(e.target.value);
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </CardContent>

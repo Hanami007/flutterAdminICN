@@ -444,5 +444,22 @@ CREATE POLICY "Public Delete course-thumbnails" ON storage.objects FOR DELETE TO
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS what_you_will_learn TEXT[];
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS requirements TEXT[];
 
+-- ────────────────────────────────────────────────────────────
+-- 16. ADD PAYMENT SLIP COLUMNS AND STORAGE BUCKET
+-- ────────────────────────────────────────────────────────────
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS slip_url TEXT;
+
+-- Setup storage bucket for payment slips
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('payment-slips', 'payment-slips', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- RLS policies for payment-slips
+DROP POLICY IF EXISTS "Public Access payment-slips" ON storage.objects;
+DROP POLICY IF EXISTS "Public Upload payment-slips" ON storage.objects;
+CREATE POLICY "Public Access payment-slips" ON storage.objects FOR SELECT TO public USING (bucket_id = 'payment-slips');
+CREATE POLICY "Public Upload payment-slips" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'payment-slips');
+
+
 
 

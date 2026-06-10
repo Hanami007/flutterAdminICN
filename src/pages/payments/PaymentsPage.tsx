@@ -26,6 +26,9 @@ export default function PaymentsPage() {
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
 
+  // Slip preview dialog state
+  const [selectedSlipUrl, setSelectedSlipUrl] = useState<string | null>(null);
+
   const { data: paymentsData, isLoading: paymentsLoading } = usePayments({
     page,
     search,
@@ -98,9 +101,29 @@ export default function PaymentsPage() {
       key: 'transaction_id',
       label: 'Transaction ID / Date',
       render: (p) => (
-        <div>
-          <p className="font-semibold text-sm font-mono text-foreground">{p.transaction_id || '—'}</p>
-          <p className="text-xs text-muted-foreground">{formatDate(p.created_at)}</p>
+        <div className="flex items-center gap-3">
+          {p.slip_url ? (
+            <div
+              onClick={() => setSelectedSlipUrl(p.slip_url)}
+              className="w-10 h-10 shrink-0 rounded border border-border overflow-hidden cursor-pointer hover:opacity-80 transition-opacity relative group"
+              title="Click to view slip"
+            >
+              <img src={p.slip_url} alt="Slip" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-[10px] text-white font-semibold">View</span>
+              </div>
+            </div>
+          ) : (
+            p.payment_method === 'qr_scan' && (
+              <div className="w-10 h-10 shrink-0 rounded border border-border bg-muted flex items-center justify-center text-[10px] text-muted-foreground font-semibold" title="No slip uploaded">
+                No Slip
+              </div>
+            )
+          )}
+          <div>
+            <p className="font-semibold text-sm font-mono text-foreground">{p.transaction_id || '—'}</p>
+            <p className="text-xs text-muted-foreground">{formatDate(p.created_at)}</p>
+          </div>
         </div>
       ),
     },
@@ -302,6 +325,36 @@ export default function PaymentsPage() {
             >
               Confirm Refund
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Slip Dialog */}
+      <Dialog open={!!selectedSlipUrl} onOpenChange={(open) => !open && setSelectedSlipUrl(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Payment Slip</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-2 bg-muted rounded-lg overflow-hidden max-h-[70vh]">
+            {selectedSlipUrl && (
+              <img
+                src={selectedSlipUrl}
+                alt="Payment Slip"
+                className="max-w-full max-h-[60vh] object-contain rounded"
+              />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedSlipUrl(null)}>
+              Close
+            </Button>
+            {selectedSlipUrl && (
+              <Button asChild>
+                <a href={selectedSlipUrl} target="_blank" rel="noopener noreferrer">
+                  Open in New Tab
+                </a>
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
